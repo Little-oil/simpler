@@ -13,7 +13,6 @@
 
 #if __has_include(<pto/common/cpu_stub.hpp>)
 #include <pto/common/cpu_stub.hpp>
-#define SIMPLER_FFTS_HAS_PTO_CPU_STUB
 #endif
 
 #include <atomic>
@@ -146,7 +145,7 @@ extern "C" __attribute__((visibility("default"))) void
 pto_sim_register_hooks(void *get_subblock_id, void *get_pipe_shared_state) {
     sim_ffts::subblock_hook = reinterpret_cast<sim_ffts::SubblockHook>(get_subblock_id);
     sim_ffts::storage_hook = reinterpret_cast<sim_ffts::StorageHook>(get_pipe_shared_state);
-#if defined(SIMPLER_FFTS_HAS_PTO_CPU_STUB)
+#if __has_include(<pto/common/cpu_stub.hpp>)
     pto::cpu_sim::register_hooks(get_subblock_id, get_pipe_shared_state);
 #endif
 }
@@ -160,7 +159,3 @@ static inline void ffts_cross_core_sync(int pipe, uint16_t message) {
 }
 
 static inline void wait_flag_dev(int event_id) { __builtin_cce_wait_flag_dev(event_id); }
-
-#if defined(SIMPLER_FFTS_HAS_PTO_CPU_STUB)
-#undef SIMPLER_FFTS_HAS_PTO_CPU_STUB
-#endif

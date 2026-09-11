@@ -14,15 +14,19 @@ from pathlib import Path
 
 import pytest
 
+from simpler_setup import SceneTestLevel, scene_level
 from simpler_setup.environment import PROJECT_ROOT
 from simpler_setup.kernel_compiler import KernelCompiler
 from simpler_setup.pto_isa import ensure_pto_isa_root
 
 
-def test_ffts_mode2_credits_across_kernel_dsos(tmp_path):
-    compiler = KernelCompiler("a2a3sim")
+@scene_level(SceneTestLevel.CHIP)
+@pytest.mark.platforms(["a2a3sim"])
+@pytest.mark.runtime("host_build_graph")
+def test_ffts_mode2_credits_across_kernel_dsos(tmp_path, st_platform):
+    compiler = KernelCompiler(st_platform)
     isa = ensure_pto_isa_root()
-    source_dir = Path(__file__).parent / "fixtures" / "sim_ffts"
+    source_dir = Path(__file__).parent / "fixtures"
     libraries = []
     for core_type in ("aic", "aiv"):
         binary = compiler._compile_incore_sim(
@@ -33,8 +37,7 @@ def test_ffts_mode2_credits_across_kernel_dsos(tmp_path):
         libraries.append(library)
 
     context = PROJECT_ROOT / "build" / "lib" / "libcpu_sim_context.so"
-    if not context.is_file():
-        pytest.skip("Install a simulator runtime before running FFTS integration tests")
+    assert context.is_file(), "Install the simulator runtime before running FFTS integration tests"
     driver = tmp_path / "driver"
     command = [
         compiler.gxx15.cxx_path,
