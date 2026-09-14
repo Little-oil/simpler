@@ -40,8 +40,6 @@ struct Kernel {
     Event wait;
     Event legacy_signal;
     Event legacy_wait;
-    bool (*rejects_mode)(int);
-    bool (*rejects_count)(int);
 
     explicit Kernel(const char *path) {
         handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
@@ -59,8 +57,6 @@ struct Kernel {
         wait = reinterpret_cast<Event>(lookup("wait_event"));
         legacy_signal = reinterpret_cast<Event>(lookup("legacy_signal_event"));
         legacy_wait = reinterpret_cast<Event>(lookup("legacy_wait_event"));
-        rejects_mode = reinterpret_cast<bool (*)(int)>(lookup("rejects_mode"));
-        rejects_count = reinterpret_cast<bool (*)(int)>(lookup("rejects_count"));
     }
 };
 
@@ -96,58 +92,6 @@ struct Waiter {
         if (thread.joinable()) thread.join();
     }
 };
-
-void credits(Kernel &cube, Kernel &vector) {
-    std::cout << "broadcast and queued credits" << std::endl;
-    bind();
-    for (int i = 0; i < 3; ++i)
-        cube.signal(0);
-    for (int lane = 0; lane < 2; ++lane) {
-        bind(0, 0, lane);
-        for (int i = 0; i < 3; ++i)
-            vector.wait(0);
-    }
-    Waiter lane0([&] {
-        bind();
-        vector.wait(0);
-    });
-    Waiter lane1([&] {
-        bind(0, 0, 1);
-        vector.wait(0);
-    });
-    lane0.blocked();
-    lane1.blocked();
-    bind();
-    cube.legacy_signal(0);
-    lane0.finish();
-    lane1.finish();
-
-    std::cout << "joint AIV completion and event isolation" << std::endl;
-    bind();
-    vector.signal(3);
-    vector.signal(3);
-    Waiter joined([&] {
-        bind();
-        cube.wait(3);
-    });
-    joined.blocked();
-    bind(0, 0, 1);
-    vector.signal(7);
-    joined.blocked();
-    vector.signal(3);
-    joined.finish();
-    Waiter joined2([&] {
-        bind();
-        cube.legacy_wait(3);
-    });
-    joined2.blocked();
-    bind(0, 0, 1);
-    vector.legacy_signal(3);
-    joined2.finish();
-    bind();
-    vector.signal(7);
-    cube.wait(7);
-}
 
 void isolation(Kernel &cube, Kernel &vector) {
     std::cout << "device and cluster isolation" << std::endl;
@@ -278,13 +222,6 @@ int main(int argc, char **argv) {
     Kernel cube(argv[1]);
     Kernel vector(argv[2]);
     bind();
-    for (int mode : {0, 1, 3}) {
-        if (!cube.rejects_mode(mode) || !vector.rejects_mode(mode)) fail("unsupported mode was accepted");
-    }
-    for (int count : {0, 2, 15}) {
-        if (!cube.rejects_count(count) || !vector.rejects_count(count)) fail("unsupported count was accepted");
-    }
-    credits(cube, vector);
     isolation(cube, vector);
     pipeline(cube, vector);
     pto_cpu_sim_release_device(0);

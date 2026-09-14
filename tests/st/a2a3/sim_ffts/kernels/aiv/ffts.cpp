@@ -13,14 +13,21 @@
 #include <cstdint>
 #include <pto/pto-inst.hpp>
 
-extern "C" void signal_event(int event) {
-    __builtin_cce_ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
+#include "intrinsic.h"
+#include "tensor.h"
+
+extern "C" void kernel_entry(int64_t *args) {
+    auto *scratch = reinterpret_cast<Tensor *>(args[0]);
+    auto *output = reinterpret_cast<Tensor *>(args[1]);
+    const int block = get_block_idx(args);
+    const int lane = get_subblockid();
+    auto *data = reinterpret_cast<int32_t *>(scratch->buffer.addr) + scratch->start_offset + block * 4;
+    auto *result = reinterpret_cast<int32_t *>(output->buffer.addr) + output->start_offset + block * 14;
+    for (int epoch = 1; epoch <= 7; ++epoch) {
+        __builtin_cce_wait_flag_dev(0);
+        data[lane + 1] = data[0] * (lane + 1);
+        __builtin_cce_ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, 1));
+        wait_flag_dev(2);
+        result[(epoch - 1) * 2 + lane] = data[3] + lane;
+    }
 }
-
-extern "C" void wait_event(int event) { __builtin_cce_wait_flag_dev(event); }
-
-extern "C" void legacy_signal_event(int event) {
-    ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
-}
-
-extern "C" void legacy_wait_event(int event) { wait_flag_dev(event); }

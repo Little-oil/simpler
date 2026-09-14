@@ -9,18 +9,21 @@
  * -----------------------------------------------------------------------------------------------------------
  */
 
-#include <cstddef>
-#include <cstdint>
-#include <pto/pto-inst.hpp>
+#include "orchestration_api.h"
 
-extern "C" void signal_event(int event) {
-    __builtin_cce_ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
+extern "C" __attribute__((visibility("default"))) OrchestrationConfig aicpu_orchestration_config(const ChipTaskArgs &) {
+    return OrchestrationConfig{.expected_arg_count = 2};
 }
 
-extern "C" void wait_event(int event) { __builtin_cce_wait_flag_dev(event); }
-
-extern "C" void legacy_signal_event(int event) {
-    ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
+extern "C" __attribute__((visibility("default"))) void aicpu_orchestration_entry(const ChipTaskArgs &orch_args) {
+    MixedKernels kernels;
+    kernels.aic_kernel_id = 0;
+    kernels.aiv0_kernel_id = 1;
+    kernels.aiv1_kernel_id = 2;
+    CoreTaskArgs args;
+    args.add_inout(orch_args.tensor(0).ref());
+    args.add_inout(orch_args.tensor(1).ref());
+    args.launch_spec.set_block_num(2);
+    args.launch_spec.set_require_sync_start(true);
+    rt_submit_task(kernels, args);
 }
-
-extern "C" void legacy_wait_event(int event) { wait_flag_dev(event); }

@@ -13,14 +13,18 @@
 #include <cstdint>
 #include <pto/pto-inst.hpp>
 
-extern "C" void signal_event(int event) {
-    __builtin_cce_ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
+#include "intrinsic.h"
+#include "tensor.h"
+
+extern "C" void kernel_entry(int64_t *args) {
+    auto *scratch = reinterpret_cast<Tensor *>(args[0]);
+    const int block = get_block_idx(args);
+    auto *data = reinterpret_cast<int32_t *>(scratch->buffer.addr) + scratch->start_offset + block * 4;
+    for (int epoch = 1; epoch <= 7; ++epoch) {
+        data[0] = block * 100 + epoch;
+        __builtin_cce_ffts_cross_core_sync(PIPE_FIX, pto::getFFTSMsg(FFTS_MODE_VAL, 0));
+        __builtin_cce_wait_flag_dev(1);
+        data[3] = data[1] + data[2];
+        ffts_cross_core_sync(PIPE_FIX, pto::getFFTSMsg(FFTS_MODE_VAL, 2));
+    }
 }
-
-extern "C" void wait_event(int event) { __builtin_cce_wait_flag_dev(event); }
-
-extern "C" void legacy_signal_event(int event) {
-    ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
-}
-
-extern "C" void legacy_wait_event(int event) { wait_flag_dev(event); }
