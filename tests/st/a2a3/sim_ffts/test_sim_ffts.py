@@ -20,17 +20,26 @@ from simpler_setup.kernel_compiler import KernelCompiler
 from simpler_setup.pto_isa import ensure_pto_isa_root
 
 
+@pytest.mark.parametrize("with_pto_isa", [False, True], ids=["standalone", "pto"])
 @scene_level(SceneTestLevel.CHIP)
 @pytest.mark.platforms(["a2a3sim"])
 @pytest.mark.runtime("host_build_graph")
-def test_ffts_mode2_credits_across_kernel_dsos(tmp_path, st_platform):
+def test_ffts_mode2_credits_across_kernel_dsos(tmp_path, st_platform, with_pto_isa):
     compiler = KernelCompiler(st_platform)
-    isa = ensure_pto_isa_root()
+    isa = ensure_pto_isa_root() if with_pto_isa else None
     source_dir = Path(__file__).parent / "fixtures"
+    source = source_dir / "kernel.cpp"
+    if with_pto_isa:
+        source = tmp_path / "pto_kernel.cpp"
+        source.write_text('#include <pto/pto-inst.hpp>\n#include "kernel.cpp"\n')
     libraries = []
     for core_type in ("aic", "aiv"):
         binary = compiler._compile_incore_sim(
-            str(source_dir / "kernel.cpp"), core_type=core_type, pto_isa_root=isa, build_dir=str(tmp_path)
+            str(source),
+            core_type=core_type,
+            pto_isa_root=isa,
+            extra_include_dirs=[str(source_dir)],
+            build_dir=str(tmp_path),
         )
         library = tmp_path / f"{core_type}.so"
         library.write_bytes(binary)

@@ -11,16 +11,20 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <pto/pto-inst.hpp>
 
 extern "C" void signal_event(int event) {
-    __builtin_cce_ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
+    __builtin_cce_ffts_cross_core_sync(0, pto::getFFTSMsg(FFTS_MODE_VAL, event));
 }
 
 extern "C" void wait_event(int event) { __builtin_cce_wait_flag_dev(event); }
 
-extern "C" void legacy_signal_event(int event) {
-    ffts_cross_core_sync(PIPE_MTE3, pto::getFFTSMsg(FFTS_MODE_VAL, event));
-}
+extern "C" void legacy_signal_event(int event) { ffts_cross_core_sync(0, pto::getFFTSMsg(FFTS_MODE_VAL, event)); }
 
 extern "C" void legacy_wait_event(int event) { wait_flag_dev(event); }
+
+// CPU event tests exercise ordering independently of hardware pipeline selection.
+extern "C" void signal_message(int mode, int event, int count) {
+    __builtin_cce_ffts_cross_core_sync(0, pto::getFFTSMsg(mode, event, count));
+}
+
+extern "C" int encode_message(int mode, int event, int count) { return pto::getFFTSMsg(mode, event, count); }
